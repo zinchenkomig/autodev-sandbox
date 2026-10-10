@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AutoDev Sandbox</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 3rem auto; padding: 0 1rem; }
+    input, button { font-size: 1rem; padding: .5rem; }
+  </style>
+</head>
+<body>
+  <h1>AutoDev Sandbox</h1>
+  <p>Тестовый проект для сквозной проверки AutoDev.</p>
+  <form id="calc">
+    <input id="a" type="number" value="2"> + <input id="b" type="number" value="3">
+    <button>=</button> <output id="out"></output>
+  </form>
+  <script type="module">
+    import { add } from './calc.js'
+    document.getElementById('calc').addEventListener('submit', (e) => {
+      e.preventDefault()
+      const a = Number(document.getElementById('a').value)
+      const b = Number(document.getElementById('b').value)
+      document.getElementById('out').textContent = add(a, b)
+    })
+  </script>
+</body>
+</html>
