@@ -16,13 +16,23 @@
     <input id="a" type="number" value="2"> + <input id="b" type="number" value="3">
     <button>=</button> <output id="out"></output>
   </form>
+  <form id="mul">
+    <input id="ma" type="number" value="2"> × <input id="mb" type="number" value="3">
+    <button>=</button> <output id="mout"></output>
+  </form>
   <script type="module">
-    import { add } from './calc.js'
+    import { add, multiply } from './calc.js'
     document.getElementById('calc').addEventListener('submit', (e) => {
       e.preventDefault()
       const a = Number(document.getElementById('a').value)
       const b = Number(document.getElementById('b').value)
       document.getElementById('out').textContent = add(a, b)
+    })
+    document.getElementById('mul').addEventListener('submit', (e) => {
+      e.preventDefault()
+      const a = Number(document.getElementById('ma').value)
+      const b = Number(document.getElementById('mb').value)
+      document.getElementById('mout').textContent = multiply(a, b)
     })
   </script>
 </body>
