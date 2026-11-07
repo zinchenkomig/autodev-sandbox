@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Недвижимость Москвы — AutoDev Sandbox</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 3rem auto; padding: 0 1rem; }
+    input, select, button { font-size: 1rem; padding: .5rem; }
+    label { display: block; margin: .5rem 0; }
+    .note { color: #666; font-size: .875rem; }
+    .error, .warn { color: #b00020; }
+    ul.checks { list-style: none; padding: 0; }
+  </style>
+</head>
+<body>
+  <h1>Недвижимость Москвы</h1>
+  <p><a href="./index.html">← На главную</a></p>
+
+  <h2>Сравнение цен</h2>
+  <form id="cmp">
+    <label>Район
+      <select id="district"><option value="">— выберите —</option></select>
+    </label>
+    <label>Площадь, м² <input id="area" type="number" step="any"></label>
+    <label>Цена, ₽ <input id="price" type="number" step="any"></label>
+    <button>Сравнить</button>
+  </form>
+  <div id="cmp-out" aria-live="polite"></div>
+  <p class="note">Ориентировочные данные, не оферта и не оценка.</p>
+
+  <h2>Проверка продавца и документов</h2>
+  <form id="chk">
+    <ul class="checks" id="items"></ul>
+    <button>Проверить</button>
+  </form>
+  <div id="chk-out" aria-live="polite"></div>
+  <p class="note">Не заменяет юриста и выписку ЕГРН.</p>
+
+  <script type="module">
+    import { PRICE_PER_M2, CHECKLIST, compare, checklistResult } from './realty.js'
+    const $ = (id) => document.getElementById(id)
+    const fmt = (n) => Math.round(n).toLocaleString('ru-RU')
+    const para = (text, cls) => {
+      const p = document.createElement('p')
+      p.textContent = text
+      if (cls) p.className = cls
+      return p
+    }
+
+    for (const d of Object.keys(PRICE_PER_M2)) {
+      const o = document.createElement('option')
+      o.value = o.textContent = d
+      $('district').append(o)
+    }
+    CHECKLIST.forEach((text, i) => {
+      const li = document.createElement('li')
+      const label = document.createElement('label')
+      const cb = document.createElement('input')
+      cb.type = 'checkbox'
+      cb.id = 'c' + i
+      label.append(cb, ' ' + text)
+      li.append(label)
+      $('items').append(li)
+    })
+
+    $('cmp').addEventListener('submit', (e) => {
+      e.preventDefault()
+      const out = $('cmp-out')
+      out.replaceChildren()
+      const r = compare($('district').value, $('area').valueAsNumber, $('price').valueAsNumber)
+      if (r.error) return out.append(para(r.error, 'error'))
+      out.append(
+        para(`Цена за м²: ${fmt(r.perM2)} ₽`),
+        para(`Средняя по району: ${fmt(r.average)} ₽/м²`),
+        para(`Итог: ${r.verdict}`),
+      )
+      if (r.suspicious) out.append(para('Подозрительно дёшево — проверьте документы особенно тщательно.', 'warn'))
+    })
+
+    $('chk').addEventListener('submit', (e) => {
+      e.preventDefault()
+      const out = $('chk-out')
+      out.replaceChildren()
+      const r = checklistResult(CHECKLIST.map((_, i) => $('c' + i).checked))
+      if (r.ok) return out.append(para('Всё отмечено — можно двигаться дальше'))
+      out.append(para('Не отмечено (риски):', 'warn'))
+      const ul = document.createElement('ul')
+      for (const t of r.risks) {
+        const li = document.createElement('li')
+        li.textContent = t
+        ul.append(li)
+      }
+      out.append(ul)
+    })
+  </script>
+</body>
+</html>
