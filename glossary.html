@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Глоссарии китайского — AutoDev Sandbox</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 32rem; margin: 3rem auto; padding: 0 1rem; }
+    input, button, select { font-size: 1rem; padding: .6rem; min-height: 2.75rem; box-sizing: border-box; }
+    input { width: 100%; margin-bottom: .5rem; }
+    .row { display: flex; gap: .5rem; flex-wrap: wrap; margin: .5rem 0; }
+    .row > * { flex: 1; }
+    .error { color: #b00020; min-height: 1.2em; }
+    .note, .hint, .example, .pinyin { color: #666; }
+    .note { font-size: .85rem; }
+    .card { border: 1px solid #ddd; border-radius: .5rem; padding: .75rem; margin: .75rem 0; }
+    .big { font-size: 2rem; margin: 0; word-break: break-word; }
+    .example { font-size: .85rem; margin: .4rem 0 0; }
+    .hidden-answer { cursor: pointer; background: #eee; border: 0; width: 100%; text-align: left; margin-top: .4rem; }
+    .nopinyin { color: #a60; font-size: .85rem; }
+    [hidden] { display: none !important; }
+  </style>
+</head>
+<body>
+  <h1>Глоссарии китайского</h1>
+  <p><a href="./index.html">← На главную</a></p>
+  <p class="note">Данные хранятся только в этом браузере</p>
+
+  <section id="spheres">
+    <p id="empty-spheres" class="hint">Создайте первый глоссарий</p>
+    <div id="sphere-bar" hidden>
+      <select id="sphere-select" aria-label="Сфера"></select>
+      <div class="row">
+        <button id="rename-sphere" type="button">Переименовать</button>
+        <button id="delete-sphere" type="button">Удалить</button>
+      </div>
+    </div>
+    <form id="sphere-form">
+      <input id="sphere-name" placeholder="Название сферы" autocomplete="off">
+      <button>Добавить</button>
+    </form>
+    <p id="sphere-error" class="error"></p>
+  </section>
+
+  <section id="words" hidden>
+    <h2>Добавить слово</h2>
+    <form id="word-form">
+      <input id="f-hanzi" placeholder="汉字" autocomplete="off">
+      <input id="f-pinyin" placeholder="Пиньинь" autocomplete="off">
+      <input id="f-russian" placeholder="Русский" autocomplete="off">
+      <input id="f-example" placeholder="Пример (необязательно)" autocomplete="off">
+      <div class="row">
+        <button id="word-submit">Добавить</button>
+        <button id="word-cancel" type="button" hidden>Отмена</button>
+      </div>
+    </form>
+    <p id="word-error" class="error"></p>
+
+    <input id="search" type="search" placeholder="Поиск" autocomplete="off">
+    <div class="row">
+      <button id="dir-zh" type="button">中 → РУ</button>
+      <button id="dir-ru" type="button">РУ → 中</button>
+    </div>
+    <div id="list"></div>
+  </section>
+
+  <script type="module">
+    import {
+      loadState, saveState, addGlossary, renameGlossary, deleteGlossary,
+      addWord, updateWord, deleteWord, searchWords,
+    } from './glossary.js'
+
+    const $ = (id) => document.getElementById(id)
+    let state = loadState(localStorage)
+    let current = state.glossaries[0]?.id ?? null
+    let direction = 'zh'
+    let editingId = null
+    const revealed = new Set()
+
+    function commit(next) { state = next; saveState(localStorage, state) }
+    const glossary = () => state.glossaries.find((g) => g.id === current)
+
+    function resetForm() {
+      editingId = null
+      for (const f of ['hanzi', 'pinyin', 'russian', 'example']) $('f-' + f).value = ''
+      $('word-submit').textContent = 'Добавить'
+      $('word-cancel').hidden = true
+    }
+
+    function el(tag, text, cls) {
+      const e = document.createElement(tag)
+      if (text !== undefined) e.textContent = text
+      if (cls) e.className = cls
+      return e
+    }
+
+    function render() {
+      if (!glossary()) current = state.glossaries[0]?.id ?? null
+      const g = glossary()
+      $('empty-spheres').hidden = !!g
+      $('sphere-bar').hidden = !g
+      $('words').hidden = !g
+      $('dir-zh').disabled = direction === 'zh'
+      $('dir-ru').disabled = direction === 'ru'
+      const sel = $('sphere-select')
+      sel.replaceChildren(...state.glossaries.map((x) => {
+        const o = el('option', x.name); o.value = x.id; return o
+      }))
+      if (!g) return
+      sel.value = g.id
+
+      const list = $('list')
+      list.replaceChildren()
+      if (!g.words.length) { list.append(el('p', 'В этом глоссарии пока нет слов', 'hint')); return }
+      const found = searchWords(g.words, $('search').value)
+      if (!found.length) { list.append(el('p', 'Ничего не найдено', 'hint')); return }
+      for (const w of found) {
+        const card = el('div', undefined, 'card')
+        const front = direction === 'zh' ? w.hanzi : w.russian
+        const back = direction === 'zh' ? w.russian : w.hanzi
+        card.append(el('p', front, 'big'))
+        if (direction === 'zh') card.append(w.pinyin ? el('div', w.pinyin, 'pinyin') : el('div', 'без пиньиня', 'nopinyin'))
+        const shown = revealed.has(w.id)
+        if (shown) {
+          const b = el('button', back); b.type = 'button'; b.className = 'hidden-answer'
+          b.style.background = 'none'
+          b.addEventListener('click', () => { revealed.delete(w.id); render() })
+          card.append(b)
+          if (direction === 'ru') card.append(w.pinyin ? el('div', w.pinyin, 'pinyin') : el('div', 'без пиньиня', 'nopinyin'))
+        } else {
+          const b = el('button', 'Показать ответ'); b.type = 'button'; b.className = 'hidden-answer'
+          b.addEventListener('click', () => { revealed.add(w.id); render() })
+          card.append(b)
+        }
+        if (w.example) card.append(el('p', w.example, 'example'))
+        const row = el('div', undefined, 'row')
+        const edit = el('button', 'Изменить'); edit.type = 'button'
+        edit.addEventListener('click', () => {
+          editingId = w.id
+          $('f-hanzi').value = w.hanzi; $('f-pinyin').value = w.pinyin
+          $('f-russian').value = w.russian; $('f-example').value = w.example
+          $('word-submit').textContent = 'Сохранить'
+          $('word-cancel').hidden = false
+          $('word-error').textContent = ''
+          $('f-hanzi').focus()
+        })
+        const del = el('button', 'Удалить'); del.type = 'button'
+        del.addEventListener('click', () => {
+          if (!confirm('Удалить слово «' + w.hanzi + '»?')) return
+          commit(deleteWord(state, g.id, w.id))
+          if (editingId === w.id) resetForm()
+          render()
+        })
+        row.append(edit, del)
+        card.append(row)
+        list.append(card)
+      }
+    }
+
+    $('sphere-form').addEventListener('submit', (e) => {
+      e.preventDefault()
+      const r = addGlossary(state, $('sphere-name').value)
+      $('sphere-error').textContent = r.error ?? ''
+      if (r.error) return
+      commit(r.state); current = r.id
+      $('sphere-name').value = ''
+      resetForm(); render()
+    })
+    $('sphere-select').addEventListener('change', (e) => {
+      current = e.target.value; resetForm(); $('search').value = ''; render()
+    })
+    $('rename-sphere').addEventListener('click', () => {
+      const name = prompt('Новое название сферы', glossary().name)
+      if (name === null) return
+      const r = renameGlossary(state, current, name)
+      $('sphere-error').textContent = r.error ?? ''
+      if (!r.error) { commit(r.state); render() }
+    })
+    $('delete-sphere').addEventListener('click', () => {
+      const g = glossary()
+      if (!confirm('Удалить сферу «' + g.name + '» вместе со словами (' + g.words.length + ')?')) return
+      commit(deleteGlossary(state, g.id))
+      current = state.glossaries[0]?.id ?? null
+      resetForm(); render()
+    })
+    $('word-form').addEventListener('submit', (e) => {
+      e.preventDefault()
+      const input = {
+        hanzi: $('f-hanzi').value, pinyin: $('f-pinyin').value,
+        russian: $('f-russian').value, example: $('f-example').value,
+      }
+      const r = editingId ? updateWord(state, current, editingId, input) : addWord(state, current, input)
+      $('word-error').textContent = r.error ?? ''
+      if (r.error) return
+      commit(r.state); resetForm(); render()
+    })
+    $('word-cancel').addEventListener('click', () => { resetForm(); $('word-error').textContent = ''; })
+    $('search').addEventListener('input', render)
+    $('dir-zh').addEventListener('click', () => { direction = 'zh'; revealed.clear(); render() })
+    $('dir-ru').addEventListener('click', () => { direction = 'ru'; revealed.clear(); render() })
+    render()
+  </script>
+</body>
+</html>
